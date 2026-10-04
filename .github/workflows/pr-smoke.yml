@@ -1,0 +1,50 @@
+name: PR smoke
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push to the same branch makes the running check pointless.
+concurrency:
+  group: pr-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Cheap checks first, so style or type errors fail in seconds, not after the app build.
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format:check
+
+      - name: Start app under test
+        run: docker compose up -d --build --wait
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:smoke
+
+      - name: Dump app logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
