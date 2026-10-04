@@ -1,0 +1,145 @@
+name: Nightly regression
+
+on:
+  schedule:
+    - cron: '30 20 * * *' # 20:30 UTC, which is 02:00 in Chennai
+  workflow_dispatch:
+  push:
+    # TEMPORARY: lets this workflow run from a branch before it exists on main. Remove before merging.
+    branches: [phase-3]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: ${{ matrix.browser }} (shard ${{ matrix.shard }} of 2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+        shard: [1, 2]
+        include:
+          # The API tests need no browser, so they run once, in the Chromium jobs.
+          - browser: chromium
+            projects: --project=ui-chromium --project=hybrid-chromium --project=api
+          - browser: firefox
+            projects: --project=ui-firefox --project=hybrid-firefox
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/bake-action@v7
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            api.cache-from=type=gha,scope=api
+            api.cache-to=type=gha,scope=api,mode=max
+            frontend.cache-from=type=gha,scope=frontend
+            frontend.cache-to=type=gha,scope=frontend,mode=max
+      - name: Start app under test
+        run: docker compose up -d --wait --no-build
+
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Regression tests
+        run: npx bddgen && npx playwright test ${{ matrix.projects }} --shard=${{ matrix.shard }}/2
+
+      - name: Dump app logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-${{ matrix.browser }}-${{ matrix.shard }}
+          path: blob-report
+          retention-days: 7
+
+  report:
+    name: Merge reports
+    needs: tests
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v8
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      # HTML for people, JSON for the history and the summary below.
+      - name: Merge into one report
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: results.json
+        run: npx playwright merge-reports --reporter=html,json ./all-blob-reports
+
+      - name: Add this run to the history
+        env:
+          REPORT_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: node src/scripts/ci-history.ts results.json playwright-report/history.json
+
+      - name: Write run summary
+        run: |
+          jq -r '"**Result:** \(.stats.expected) expected, \(.stats.unexpected) unexpected, \(.stats.flaky) flaky, \(.stats.skipped) skipped. Wall time \(.stats.duration / 1000 | floor) s."' results.json >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+
+      # Only the default branch publishes, so a branch run can never replace the live report.
+      - uses: actions/upload-pages-artifact@v5
+        if: ${{ github.ref == 'refs/heads/main' }}
+        with:
+          path: playwright-report
+
+  deploy:
+    name: Publish report to GitHub Pages
+    needs: report
+    if: ${{ github.ref == 'refs/heads/main' && needs.report.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  notify:
+    name: Notify on failure
+    needs: [tests, report]
+    if: ${{ always() && (needs.tests.result == 'failure' || needs.report.result == 'failure') }}
+    runs-on: ubuntu-latest
+    env:
+      # Secret, set under Settings > Secrets and variables > Actions. Without it this job does nothing.
+      WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+    steps:
+      - name: Post to the webhook
+        if: ${{ env.WEBHOOK_URL != '' }}
+        run: |
+          text="Nightly regression failed in ${GITHUB_REPOSITORY}: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          jq -n --arg text "$text" '{text: $text, content: $text}' | curl -sS --fail -X POST -H 'Content-Type: application/json' -d @- "$WEBHOOK_URL"
