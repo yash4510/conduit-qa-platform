@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { test as base } from 'playwright-bdd';
 import { ApiError, ConduitApi } from '../api/client.ts';
-import type { Article } from '../api/schemas.ts';
-import type { NewUser } from '../data/factories.ts';
+import type { Article, User } from '../api/schemas.ts';
+import { buildUser, type NewUser } from '../data/factories.ts';
 import { ArticleEditorPage } from '../pages/ArticleEditorPage.ts';
 import { ArticlePage } from '../pages/ArticlePage.ts';
 import { HomePage } from '../pages/HomePage.ts';
@@ -18,11 +18,16 @@ type ScenarioState = {
   comment?: string;
 };
 
+// A freshly registered user plus an API client signed in as them.
+export type Session = { user: NewUser; profile: User; api: ConduitApi };
+
 type Fixtures = {
   logger: ApiLogger;
   authUser: AuthUser;
   api: ConduitApi;
   cleanup: { trackArticle(slug: string): void };
+  guest: ConduitApi;
+  newSession: () => Promise<Session>;
   scenario: ScenarioState;
   homePage: HomePage;
   loginPage: LoginPage;
@@ -71,6 +76,26 @@ export const test = base.extend<Fixtures>({
         if (!(error instanceof ApiError && error.status === 404)) throw error;
       }
     }
+  },
+
+  // Not signed in. Pairs with newSession() for tests about who may do what.
+  guest: async ({ request, logger }, use) => {
+    await use(new ConduitApi(request, logger));
+  },
+
+  // Every call registers a brand-new user, so API tests never share data. Articles they
+  // created are deleted at teardown.
+  newSession: async ({ request, logger }, use) => {
+    const sessions: Session[] = [];
+    await use(async () => {
+      const api = new ConduitApi(request, logger);
+      const user = buildUser();
+      const profile = await api.register(user);
+      const session = { user, profile, api };
+      sessions.push(session);
+      return session;
+    });
+    for (const { api } of sessions) await api.cleanUp();
   },
 
   scenario: async ({}, use) => {

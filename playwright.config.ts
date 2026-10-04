@@ -30,5 +30,14 @@ export default defineConfig({
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
+    // No browser and no shared user: every API test registers its own users.
+    { name: 'api', testDir: 'tests/api', testMatch: /.*\.spec\.ts/ },
+    {
+      name: 'hybrid-chromium',
+      testDir: 'tests/hybrid',
+      testMatch: /.*\.spec\.ts/,
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
+    },
   ],
 });
