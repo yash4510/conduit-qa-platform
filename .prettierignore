@@ -1,0 +1,9 @@
+node_modules/
+.features-gen/
+playwright-report/
+test-results/
+blob-report/
+package-lock.json
+*.md
+# Keep hand-written quoting in healthcheck commands readable
+docker-compose.yml
