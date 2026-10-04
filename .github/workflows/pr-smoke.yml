@@ -36,7 +36,15 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
-      - run: npm run test:smoke
+      - name: Smoke tests
+        if: github.event_name != 'workflow_dispatch'
+        run: npm run test:smoke
+
+      # Manual runs (Actions tab, "Run workflow") execute everything. The scheduled
+      # nightly run replaces this in Phase 3.
+      - name: Full regression
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run test:regression
 
       - name: Dump app logs on failure
         if: failure()
