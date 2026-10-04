@@ -216,7 +216,9 @@ export class ConduitApi {
     if (this.token) headers['Authorization'] = `Token ${this.token}`;
 
     const started = Date.now();
-    const res = await this.request.fetch(url, { method, headers, data });
+    // The server closes idle keep-alive connections after about 5 s. A test that pauses on a slow UI step
+    // then reuses a dead socket and fails with "socket hang up". maxRetries retries only that ECONNRESET.
+    const res = await this.request.fetch(url, { method, headers, data, maxRetries: 2 });
     this.logger.log(method, url, res.status(), Date.now() - started);
     return res;
   }

@@ -15,7 +15,8 @@ export default defineConfig({
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
   workers: isCI ? 2 : undefined,
-  reporter: isCI ? [['list'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'on-failure' }]],
+  // CI writes a blob report per shard; a final job merges them into one HTML report.
+  reporter: isCI ? [['list'], ['blob']] : [['list'], ['html', { open: 'on-failure' }]],
   use: {
     baseURL: env.BASE_URL,
     trace: 'on-first-retry',
@@ -30,6 +31,13 @@ export default defineConfig({
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
+    // Firefox runs in the nightly matrix; pull requests stay on Chromium for speed.
+    {
+      name: 'ui-firefox',
+      testDir: bddTestDir,
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Firefox'], storageState: STORAGE_STATE },
+    },
     // No browser and no shared user: every API test registers its own users.
     { name: 'api', testDir: 'tests/api', testMatch: /.*\.spec\.ts/ },
     {
@@ -38,6 +46,12 @@ export default defineConfig({
       testMatch: /.*\.spec\.ts/,
       // Fresh user per test (signInAs), so no shared session and no setup dependency.
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'hybrid-firefox',
+      testDir: 'tests/hybrid',
+      testMatch: /.*\.spec\.ts/,
+      use: { ...devices['Desktop Firefox'] },
     },
   ],
 });
