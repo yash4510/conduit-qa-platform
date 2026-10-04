@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     # TEMPORARY: lets this workflow run from a branch before it exists on main. Remove before merging.
-    branches: [phase-3]
+    branches: [ci-bench-d]
 
 permissions:
   contents: read
@@ -17,14 +17,14 @@ concurrency:
 
 jobs:
   tests:
-    name: ${{ matrix.browser }} (shard ${{ matrix.shard }} of 2)
+    name: ${{ matrix.browser }} (shard ${{ matrix.shard }} of 1)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox]
-        shard: [1, 2]
+        shard: [1]
         include:
           # The API tests need no browser, so they run once, in the Chromium jobs.
           - browser: chromium
@@ -55,7 +55,7 @@ jobs:
       - run: npx playwright install --with-deps ${{ matrix.browser }}
 
       - name: Regression tests
-        run: npx bddgen && npx playwright test ${{ matrix.projects }} --shard=${{ matrix.shard }}/2
+        run: npx bddgen && npx playwright test ${{ matrix.projects }} --shard=${{ matrix.shard }}/1
 
       - name: Dump app logs on failure
         if: failure()
