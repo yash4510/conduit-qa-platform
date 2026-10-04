@@ -36,8 +36,8 @@ export default defineConfig({
       name: 'hybrid-chromium',
       testDir: 'tests/hybrid',
       testMatch: /.*\.spec\.ts/,
-      dependencies: ['setup'],
-      use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
+      // Fresh user per test (signInAs), so no shared session and no setup dependency.
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });

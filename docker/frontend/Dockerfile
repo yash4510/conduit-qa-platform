@@ -32,6 +32,20 @@ ADD --checksum=sha256:f4b3d6224f725fc0ba08a943d931d341082e57cc8dac3a7cf7fff5b93b
 RUN sed -i "s|//demo.productionready.io/main.css|/main.css|" public/index.html \
  && grep -q 'href="/main.css"' public/index.html
 
+# Same for the icon font. The comment delete control is an icon with no text, so without the
+# font it has no size and cannot be clicked. Only the woff and ttf files the CSS can use are kept.
+ADD --checksum=sha256:92ac508220f5bb60ec94e07650528eb66625f82a4740ada068cde05365781286 --chmod=644 \
+    https://code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css \
+    public/ionicons/css/ionicons.min.css
+ADD --checksum=sha256:a75e381026eced44f4e8d6ea4dc40e28e6a64dd953e8c0b6c239d1ac844c4a2d --chmod=644 \
+    https://code.ionicframework.com/ionicons/2.0.1/fonts/ionicons.woff \
+    public/ionicons/fonts/ionicons.woff
+ADD --checksum=sha256:5e700835ec05293a3d0f9e354e7d038319d34521cd279e782198dff6d1dd58f2 --chmod=644 \
+    https://code.ionicframework.com/ionicons/2.0.1/fonts/ionicons.ttf \
+    public/ionicons/fonts/ionicons.ttf
+RUN sed -i "s|//code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css|/ionicons/css/ionicons.min.css|" public/index.html \
+ && grep -q 'href="/ionicons/css/ionicons.min.css"' public/index.html
+
 # No lockfile upstream, so `npm ci` is not possible.
 RUN npm install && npm run build
 

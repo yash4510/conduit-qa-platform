@@ -134,6 +134,11 @@ export class ConduitApi {
     return this.parse(res, articlesResponseSchema, 200);
   }
 
+  // For articles created outside this client (e.g. through the UI), so cleanUp() removes them too.
+  trackArticle(slug: string): void {
+    this.createdSlugs.add(slug);
+  }
+
   // Changing the title changes the slug, so track the new one for cleanup.
   async updateArticle(slug: string, changes: Partial<NewArticle>): Promise<Article> {
     const res = await this.send('PUT', `/articles/${slug}`, { article: changes });

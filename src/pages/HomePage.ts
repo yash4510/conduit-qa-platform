@@ -18,6 +18,10 @@ export class HomePage {
     await this.page.goto('/');
   }
 
+  async openYourFeed(): Promise<void> {
+    await this.yourFeedTab.click();
+  }
+
   // Article cards have no role or test id; filter the card class by the visible title.
   articlePreview(title: string): Locator {
     return this.page.locator('.article-preview').filter({ hasText: title });
