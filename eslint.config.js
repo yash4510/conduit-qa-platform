@@ -17,4 +17,9 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Playwright reads a fixture's first parameter to resolve dependencies, so `{}` is required.
+    files: ['src/fixtures/**/*.ts'],
+    rules: { 'no-empty-pattern': 'off' },
+  },
 );
