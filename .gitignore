@@ -1,2 +1,25 @@
-*.md
-!README.md
+# Private working files (README.md is the only public markdown)
+AGENTS.md
+AI_USAGE.md
+PLAN_TRACKER.md
+ANTIGRAVITY_PROMPT.md
+DECISIONS.md
+HANDOFF.md
+GEMINI.md
+CLAUDE.md
+CLAUDE.local.md
+docs/
+.agent/
+.agents/
+.claude/
+
+# Secrets
+.env
+
+# Dependencies and test output
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+allure-results/
+allure-report/
