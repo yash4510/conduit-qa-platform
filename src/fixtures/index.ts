@@ -3,6 +3,7 @@ import { test as base } from 'playwright-bdd';
 import { ApiError, ConduitApi } from '../api/client.ts';
 import type { Article, User } from '../api/schemas.ts';
 import { buildUser, type NewUser } from '../data/factories.ts';
+import { ErrorList } from '../components/ErrorList.ts';
 import { ArticleEditorPage } from '../pages/ArticleEditorPage.ts';
 import { ArticlePage } from '../pages/ArticlePage.ts';
 import { HomePage } from '../pages/HomePage.ts';
@@ -19,6 +20,9 @@ type ScenarioState = {
   user?: NewUser;
   article?: Pick<Article, 'slug' | 'title' | 'body' | 'tagList'>;
   comment?: string;
+  // The browser user (fresh) and a second user, for scenarios about favourites and follows.
+  session?: Session;
+  author?: Session;
 };
 
 // The only origins a test browser may talk to: the frontend and the API.
@@ -43,6 +47,7 @@ type Fixtures = {
   articlePage: ArticlePage;
   profilePage: ProfilePage;
   settingsPage: SettingsPage;
+  errorList: ErrorList;
 };
 
 export const test = base.extend<Fixtures>({
@@ -136,4 +141,5 @@ export const test = base.extend<Fixtures>({
   articlePage: async ({ page }, use) => use(new ArticlePage(page)),
   profilePage: async ({ page }, use) => use(new ProfilePage(page)),
   settingsPage: async ({ page }, use) => use(new SettingsPage(page)),
+  errorList: async ({ page }, use) => use(new ErrorList(page)),
 });

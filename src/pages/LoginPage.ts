@@ -8,7 +8,6 @@ export class LoginPage {
   readonly emailInput: Locator;
   readonly passwordInput: Locator;
   readonly signInButton: Locator;
-  readonly errorMessages: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -16,8 +15,6 @@ export class LoginPage {
     this.emailInput = page.getByPlaceholder('Email');
     this.passwordInput = page.getByPlaceholder('Password');
     this.signInButton = page.getByRole('button', { name: 'Sign in' });
-    // Plain <ul> with no role or label; the class is the only hook.
-    this.errorMessages = page.locator('.error-messages');
   }
 
   async goto(): Promise<void> {

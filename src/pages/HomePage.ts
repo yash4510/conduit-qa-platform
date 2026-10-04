@@ -6,12 +6,14 @@ export class HomePage {
   readonly navbar: Navbar;
   readonly globalFeedTab: Locator;
   readonly yourFeedTab: Locator;
+  readonly emptyFeedMessage: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
     this.globalFeedTab = page.getByRole('link', { name: 'Global Feed' });
     this.yourFeedTab = page.getByRole('link', { name: 'Your Feed' });
+    this.emptyFeedMessage = page.getByText('No articles are here... yet.');
   }
 
   async goto(): Promise<void> {
