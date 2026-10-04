@@ -1,0 +1,53 @@
+# App under test. Start: docker compose up -d --build --wait
+# Reset to an empty database: docker compose down -v
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: conduit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-conduit}
+      POSTGRES_DB: conduit
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conduit -d conduit"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./docker/api
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://conduit:${POSTGRES_PASSWORD:-conduit}@db:5432/conduit
+      JWT_SECRET: ${JWT_SECRET:-local-only-not-a-secret}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # /api/tags needs a migrated database, so it proves the API is actually usable.
+      # 127.0.0.1, not localhost: Alpine may resolve localhost to IPv6 first.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/tags | grep -q tags"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  frontend:
+    build: ./docker/frontend
+    ports:
+      - "4100:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ | grep -q '<div id=\"root\"'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db_data:
