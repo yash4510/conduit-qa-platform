@@ -17,6 +17,7 @@ export default defineConfig({
   workers: isCI ? 2 : undefined,
   // CI writes a blob report per shard; a final job merges them into one HTML report.
   reporter: isCI ? [['list'], ['blob']] : [['list'], ['html', { open: 'on-failure' }]],
+  expect: { toHaveScreenshot: { animations: 'disabled', maxDiffPixelRatio: 0.001 } },
   use: {
     baseURL: env.BASE_URL,
     trace: 'on-first-retry',
@@ -37,6 +38,19 @@ export default defineConfig({
       testDir: 'tests/network',
       testMatch: /.*\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
+    },
+    // Fixed size, time zone and locale, so screenshots depend on nothing but the UI.
+    {
+      name: 'visual-chromium',
+      testDir: 'tests/visual',
+      testMatch: /.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+        timezoneId: 'UTC',
+        locale: 'en-US',
+        colorScheme: 'light',
+      },
     },
     // One stateful journey in a single file; see the header of the spec for why it is serial.
     {
