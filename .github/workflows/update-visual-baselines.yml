@@ -6,13 +6,6 @@ name: Update visual baselines
 # and commits them to that branch. Look at the image changes in that commit before merging.
 on:
   workflow_dispatch:
-  push:
-    # TEMPORARY: creates the first baselines from a branch before this workflow exists on main.
-    # Remove before merging.
-    branches: [phase-4]
-    paths:
-      - tests/visual/**/*.ts
-      - .github/workflows/update-visual-baselines.yml
 
 permissions:
   contents: write
