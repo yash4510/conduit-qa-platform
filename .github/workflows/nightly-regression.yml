@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '30 20 * * *' # 20:30 UTC, which is 02:00 in Chennai
   workflow_dispatch:
+  push:
+    # TEMPORARY: lets this workflow run from a branch before it exists on main. Remove before merging.
+    branches: [phase-4]
 
 permissions:
   contents: read
@@ -23,9 +26,10 @@ jobs:
         browser: [chromium, firefox]
         shard: [1, 2]
         include:
-          # The API tests need no browser, so they run once, in the Chromium jobs.
+          # The API tests need no browser, so they run once, in the Chromium jobs. The network, accessibility,
+          # serial and visual suites are Chromium only too; visual baselines exist for Chromium on Linux only.
           - browser: chromium
-            projects: --project=ui-chromium --project=hybrid-chromium --project=api
+            projects: --project=ui-chromium --project=hybrid-chromium --project=api --project=network-chromium --project=a11y-chromium --project=serial-chromium --project=visual-chromium
           - browser: firefox
             projects: --project=ui-firefox --project=hybrid-firefox
     steps:
@@ -57,6 +61,16 @@ jobs:
 
       - name: Regression tests
         run: npx bddgen && npx playwright test ${{ matrix.projects }} --shard=${{ matrix.shard }}/2
+
+      # Load smoke, once a night, against the app that is already running. Fails if a threshold is missed.
+      - name: Load smoke (k6)
+        if: ${{ matrix.browser == 'chromium' && matrix.shard == 1 }}
+        run: npm run perf:smoke | tee k6.log
+
+      # The job log needs a login to read; an annotation is readable through the API and shows on the run page.
+      - name: Show k6 request timings
+        if: ${{ !cancelled() && matrix.browser == 'chromium' && matrix.shard == 1 }}
+        run: echo "::notice title=k6 load smoke::$(grep -m1 'http_req_duration\.\.\.' k6.log | sed 's/^ *//')"
 
       - name: Dump app logs on failure
         if: failure()
