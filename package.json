@@ -10,7 +10,16 @@
   "scripts": {
     "bddgen": "bddgen",
     "test": "bddgen && playwright test",
-    "test:smoke": "bddgen && playwright test --grep @smoke",
+    "test:smoke": "bddgen && playwright test --grep @smoke --project=ui-chromium --project=api",
+    "test:regression": "bddgen && playwright test --project=ui-chromium --project=hybrid-chromium --project=api --project=network-chromium --project=a11y-chromium --project=serial-chromium",
+    "test:firefox": "bddgen && playwright test --project=ui-firefox --project=hybrid-firefox",
+    "test:api": "playwright test --project=api",
+    "test:network": "playwright test --project=network-chromium",
+    "test:a11y": "playwright test --project=a11y-chromium",
+    "test:visual": "playwright test --project=visual-chromium",
+    "test:serial": "playwright test --project=serial-chromium",
+    "test:hybrid": "playwright test --project=hybrid-chromium",
+    "perf:smoke": "docker run --rm -i --add-host=host.docker.internal:host-gateway -e API_URL=http://host.docker.internal:3000/api grafana/k6:2.3.0 run - < perf/k6/smoke.js",
     "seed": "node src/scripts/seed.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -19,6 +28,7 @@
     "report": "playwright show-report"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "10.0.1",
     "@faker-js/faker": "10.6.0",
     "@playwright/test": "1.63.0",

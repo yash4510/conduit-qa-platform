@@ -1,8 +1,51 @@
 # Conduit QA Platform
 
 [![PR smoke](https://github.com/yash4510/conduit-qa-platform/actions/workflows/pr-smoke.yml/badge.svg)](https://github.com/yash4510/conduit-qa-platform/actions/workflows/pr-smoke.yml)
+[![Nightly regression](https://github.com/yash4510/conduit-qa-platform/actions/workflows/nightly-regression.yml/badge.svg)](https://github.com/yash4510/conduit-qa-platform/actions/workflows/nightly-regression.yml)
+
+Latest nightly report: [TBD]
 
 A Playwright + TypeScript test automation platform for a self-hosted RealWorld "Conduit" app (a Medium-style blog: articles, comments, follows, favourites). The app runs locally in Docker, so every test runs against an environment I control.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Tests["Playwright + TypeScript"]
+    UI["UI: Gherkin + page objects"]
+    API["API: typed client + Zod"]
+    HYB["Hybrid: API + browser"]
+    NET["Network mocks"]
+    VIS["Visual"]
+    A11Y["Accessibility (axe-core)"]
+    SER["Serial journey"]
+  end
+  K6["k6 load smoke"]
+  subgraph App["App under test (Docker Compose)"]
+    FE["React frontend, nginx :4100"]
+    BE["Express + Prisma API :3000"]
+    DB[("PostgreSQL")]
+  end
+  FE --> BE --> DB
+  UI --> FE
+  HYB --> FE
+  HYB --> BE
+  API --> BE
+  SER --> FE
+  A11Y --> FE
+  VIS --> FE
+  NET -. "mocked responses" .-> FE
+  K6 --> BE
+  subgraph CI["GitHub Actions"]
+    PR["PR smoke: static checks, smoke, merge reports, PR gate"]
+    NIGHT["Nightly: Chromium and Firefox, shards, k6"]
+    PAGES["HTML report + history on GitHub Pages"]
+  end
+  PR --> Tests
+  NIGHT --> Tests
+  NIGHT --> K6
+  NIGHT --> PAGES
+```
 
 ## Stack
 
@@ -10,11 +53,17 @@ A Playwright + TypeScript test automation platform for a self-hosted RealWorld "
 |---|---|---|
 | App under test | Conduit: React/Redux frontend, Express + Prisma API, PostgreSQL | done |
 | Test framework | Playwright + TypeScript (strict), run directly by Node 24 | done |
-| BDD | playwright-bdd (Gherkin features, page objects) | done |
-| API layer | Typed client, every response validated with Zod | done |
-| Test data | @faker-js/faker factories, API-created and cleaned up per test | done |
-| CI | GitHub Actions: lint, typecheck, app in Docker, smoke suite | done |
-| Accessibility, visual, network mocks, k6 | | planned |
+| UI tests | playwright-bdd (Gherkin features, page objects) | done |
+| API tests | Typed client, every response validated with Zod | done |
+| Hybrid tests | API for setup and verification, browser for the behaviour | done |
+| Network mocks | `page.route` answers for empty, slow, odd and failing responses | done |
+| Visual tests | `toHaveScreenshot` on mocked pages, Linux baselines made in CI | done |
+| Accessibility | axe-core with a known-issues baseline | done |
+| Load smoke | k6, run from its Docker image | done |
+| Test data | @faker-js/faker factories, a fresh user per test | done |
+| CI on pull requests | GitHub Actions: lint, typecheck, app in Docker, smoke suite (shardable), one "PR gate" check | done |
+| Nightly run | Chromium + Firefox, sharded, merged HTML report, k6 | done |
+| Report on GitHub Pages, failure webhook | | [TBD] until the first publish from `main` |
 
 ## Quick start
 
@@ -27,59 +76,204 @@ npx playwright install --with-deps chromium
 npm run test:smoke
 ```
 
-- App: http://localhost:4100
-- API: http://localhost:3000/api/tags
-- Report: `npm run report`
+| Command | Runs |
+|---|---|
+| `npm run test:smoke` | the `@smoke` set: the PR gate |
+| `npm run test:api` | API tests only (no browser) |
+| `npm run test:hybrid` | hybrid tests |
+| `npm run test:network` | tests with mocked API responses |
+| `npm run test:a11y` | axe-core accessibility scans |
+| `npm run test:serial` | the one serial end-to-end journey |
+| `npm run test:visual` | screenshot tests (see the note below) |
+| `npm run test:regression` | everything above except visual, on Chromium |
+| `npm run test:firefox` | UI and hybrid tests on Firefox (`npx playwright install firefox` first) |
+| `npm run perf:smoke` | k6 load smoke (needs Docker) |
+| `npm run report` | opens the HTML report |
 
-Optional demo data for exploring the app by hand (tests do not use it):
+App: http://localhost:4100 · API: http://localhost:3000/api/tags
 
-```bash
-npm run seed   # demo_user_1@example.test / Conduit@123
-```
+**Visual tests and operating systems.** Screenshot baselines are per operating system because fonts render differently. Only the Linux ones are committed, because CI runs on Linux; they are made by the "Update visual baselines" workflow. On Windows or macOS the first `npm run test:visual` writes your own local baselines and fails once; run it again.
 
+Optional demo data for exploring the app by hand (tests do not use it): `npm run seed`, then log in as `demo_user_1@example.test` / `Conduit@123`.
 Reset to an empty database: `docker compose down -v && docker compose up -d --wait`
 
-## What the smoke suite covers
+## Test strategy
 
-| Feature | Scenarios |
+**Scope.** The whole product surface of Conduit: accounts, articles, comments, favourites, follows, feeds and tags.
+
+**Approach.** Most checks sit at the API level because it is the fastest and most precise place to test rules, permissions and error handling. The browser is used for what only a browser can show: forms, navigation, what a user sees. Hybrid tests join the two, so a UI action is verified in the API and an API change is verified in the UI. Mocked responses cover what the real API will not produce on demand.
+
+| Layer | What it proves | Tags |
+|---|---|---|
+| API (`tests/api`) | rules, permissions, validation, exact error bodies | `@api` |
+| Hybrid (`tests/hybrid`) | UI and API agree on the same data | `@hybrid` |
+| UI (`features/ui`) | the main user journeys through the browser | `@ui` |
+| Network mocks (`tests/network`) | how the UI behaves when the API is empty, slow, odd or failing | `@network` |
+| Visual (`tests/visual`) | the pages still look the same | `@visual` |
+| Accessibility (`tests/a11y`) | no new WCAG A/AA violations | `@a11y` |
+| Serial (`tests/e2e-serial`) | one user's whole journey, step by step | `@serial` |
+| Load smoke (`perf/k6`) | the API stays fast and error-free under light load | |
+
+`@smoke` is the small set that gates a pull request. `@regression` is everything else. `test:regression` runs both.
+
+**Risks I focused on.**
+- Permissions: can a guest or another user change someone else's data?
+- Validation: are bad inputs rejected with a clear error and the right status?
+- Data visibility: do users see the articles and comments they should?
+- Errors: does the server ever answer with a 500 or leak internal messages, and does the UI cope when a request fails?
+- Content safety: is text from an article shown as text and never run as markup?
+
+**Known defects are tests, not comments.** When the app is wrong, the test asserts the correct behaviour and is marked as an expected failure (`test.fail()`). It stays green while the defect exists and turns red the day someone fixes it, which tells me to remove the marker. Where the API has a quirk the frontend depends on (for example 403 for a wrong password), the test pins the current behaviour and says so in a comment. The accessibility tests use the same idea: each page lists the rules it is known to break, and the test fails if a new rule appears or a known one disappears.
+
+**Out of scope.** Performance beyond a short load smoke, security testing beyond the checks above, mobile browsers, Safari, and the third-party hosts the original app loads icons and fonts from.
+
+## Traceability
+
+| Feature | API tests | UI scenarios | Hybrid tests |
+|---|---|---|---|
+| Sign up | `users.spec`: required fields, taken username and email, no password in response, malformed email (defect) | sign up, taken email, taken username | account created in the UI can log in through the API |
+| Sign in | `users.spec`: success, wrong password, no user enumeration, missing fields | sign in, wrong password, unregistered email | |
+| Session and account | `users.spec`: current user, invalid token, bio and image update, taken email (defect) | signed-in user shown, sign out | bio saved in settings is stored by the API |
+| Articles | `articles.spec`: create, read, validation, update, slug change, partial update (defect), delete, permissions | publish, edit, delete, edit and delete buttons by owner, guest reads an article, publish errors (defect) | created in the API shown in the UI, published in the UI stored by the API, edited in the UI |
+| Comments | `comments.spec`: add, list, validation, delete, permissions, visibility to others (defect) | post, delete, box emptied, guest asked to sign in | posted in the UI stored by the API, added in the API shown in the UI, deleted in the UI |
+| Favourites | `favorites.spec`: favourite, repeat, remove, counts, guest, unknown article (defect) | favourite, remove favourite | favourite and unfavourite recorded by the API |
+| Follows and feed | `profiles.spec`, `articles.spec`: follow, unfollow, visibility, feed contents, unknown user (defect) | follow, unfollow, feed, empty feed | follow and unfollow recorded by the API, followed author in the feed |
+| Lists and tags | `articles.spec`, `tags.spec`: order, paging, tag and favourite filters, global list (defect), popular tags | | |
+
+| Cross-cutting concern | Tests |
 |---|---|
-| Authentication | guest sees sign in / sign up, sign up, sign in, wrong password rejected, signed-in user recognised |
-| Articles | publish, edit, delete |
-| Comments | post, delete |
+| Error handling in the UI | `network/home.spec`: empty list, slow response, long title and many tags, expired token; failed and aborted requests (defects) |
+| Content safety | `network/article.spec`: markup in an article body or title is shown as text; missing article (defect) |
+| Accessibility | `a11y/pages.spec`: home, sign in, sign up, new article, article, settings, profile |
+| Appearance | `visual/pages.spec`: home, article with comments, sign in, sign up, new article |
+| A whole journey | `e2e-serial/journey.spec`: sign up, publish, comment, favourite, rename, check, delete, sign out and in |
+| Speed under light load | `perf/k6/smoke.js`: reads and writes for 20 s with 5 virtual users, in the nightly run |
 
 ## How it is built
 
-- **Auth once, reuse everywhere.** A setup project signs up a user through the API and saves the browser session (`storageState`). Scenarios tagged `@guest` start signed out.
-- **Arrange through the API, assert through the UI.** "Given I have published an article" calls the API, so each scenario only drives the UI for the behaviour it tests. Created articles are deleted after each scenario.
+- **Every test owns its data.** API and hybrid tests register a fresh user per test, so no test depends on another and they run in any order. Articles are deleted after each test. The one exception, the serial journey, says why in its file header.
+- **Auth once for the UI suite.** A setup project signs a user up through the API and saves the browser session, which the BDD scenarios reuse. Scenarios tagged `@guest` start signed out.
+- **Arrange through the API, assert through the UI.** "Given I have published an article" calls the API, so a scenario only drives the browser for the behaviour it tests.
 - **Locators a user would recognise.** The app has no test ids or form labels, so page objects use roles, visible text and placeholders. CSS is used only where the app exposes nothing else, with a comment saying why.
 - **Debuggable failures.** Every test sends an `x-correlation-id` header, and the API calls it made (method, URL, status, duration) are attached to the report when it fails.
-- **Reproducible app.** Both upstream repos are pinned to commit SHAs, every container has a healthcheck, and the theme CSS is bundled with a checksum after the original CDN link went dead.
+- **Reproducible and self-contained app.** Both upstream repos are pinned to commit SHAs, every container has a healthcheck, and the theme CSS and icon font are bundled with checksums after their original hosts stopped working. The test browser aborts any request to a non-local host, so a slow CDN cannot make a test flaky.
+- **Stable screenshots.** Visual tests draw each page from mocked data with fixed text and dates, at a fixed size, time zone and locale, and CI runners are pinned to one Ubuntu version so the fonts do not change under the baselines.
 
-## Findings so far
+## CI/CD
 
-- The global feed only lists articles by "demo" accounts, so articles by normal users are hidden from everyone else. Cause: a filter in the backend's article query.
-- Some API responses differ from the RealWorld spec: a failed login returns 403, and a 401 uses a different error body.
-- Form inputs have no labels and the comment delete control is an unlabelled icon (accessibility).
+**On every pull request** (`PR smoke`):
+1. `Lint, typecheck, format` runs in parallel with the app build, so a style error fails in seconds.
+2. `Smoke` is a matrix of shards (one today, see the measurements below). Each shard builds the app images with a Docker layer cache, starts them with `docker compose up --wait`, and runs its share of the `@smoke` tests.
+3. `Merge reports` combines the shards' blob reports into one HTML report, with traces, screenshots and videos for anything that failed.
+4. `PR gate` is the single check that has to be green. It stays the same name however many shards there are, so branch protection never needs updating.
+
+**Every night** (`Nightly regression`, 02:00 Chennai time, or by hand): the UI and hybrid suites on Chromium and on Firefox, plus the API, network, accessibility, serial and visual suites on Chromium, sharded, then one merged report. The first shard also runs the k6 load smoke and shows its timings on the run page. On `main` the report is published to GitHub Pages together with a small `history.json` (totals and flaky count per run). If a shard fails, a webhook message is sent.
+
+**Visual baselines** are regenerated by a separate manual workflow, "Update visual baselines", which commits the new images to the branch. I look at the image changes in that commit before merging.
+
+**How sharding and merging work.** `--shard=1/2` makes a job run half of the selected tests. The `setup` project runs in every shard, because the tests depend on it. With the `blob` reporter each shard writes a zip instead of a report; the merge job downloads them all and `playwright merge-reports` builds one HTML report as if the run had never been split.
+
+**Measured pipeline times.** I ran the same code through five setups, five warm-cache runs each (six for the old workflow), on GitHub-hosted runners over several days. These were measured before the network, accessibility, serial, visual and k6 suites existed, so the nightly figures are for the earlier, smaller suite.
+
+| Pipeline | What is timed | Median | Min | Max |
+|---|---|---|---|---|
+| PR smoke, old: rebuild the app every run, no sharding | until the smoke job finishes | 146.5 s | 119 s | 153 s |
+| PR smoke, layer cache, 1 shard | until "PR gate" is green | 125 s | 96 s | 139 s |
+| PR smoke, layer cache, 2 shards | until "PR gate" is green | 136 s | 123 s | 174 s |
+| Nightly, 1 shard per browser | whole workflow | 162 s | 144 s | 172 s |
+| Nightly, 2 shards per browser | whole workflow | 152 s | 148 s | 162 s |
+
+The first run after the cache is empty is slower: 234 to 243 s for the PR setups and 214 to 239 s for the nightly ones.
+
+What I take from it:
+- **The layer cache helped.** Time until the gate is green dropped by about 15% (146.5 s to 125 s). Building the app was the biggest single step before; with a warm cache it takes about 20 to 30 s.
+- **Sharding the PR smoke suite did not help.** It was about 11 s slower. The smoke tests take 6 to 10 s, and every shard repeats well over a minute of setup (checkout, image load, starting the app, installing the browser). So the PR gate uses one shard, and splitting again is a one-line change in the workflow.
+- **Sharding the nightly run helped a little**, about 6% (162 s to 152 s). It will matter more as the suite grows.
+- With five runs per setup and overlapping ranges, treat these as a direction, not proof.
+
+To reproduce: `node src/scripts/ci-metrics.ts runs pr-smoke.yml --branch=ci-bench-b --until-job="PR gate" --skip-oldest=1`.
+
+## Findings
+
+Real defects found while testing, each covered by a test marked as an expected failure:
+
+| Area | Defect |
+|---|---|
+| Visibility | The global article list shows only articles by "demo" accounts or the viewer's own, so an ordinary user's articles are hidden from everyone else |
+| Visibility | Comments follow the same rule: only the author of a comment can see it |
+| Articles | Updating only the body removes all tags |
+| Errors | Five requests return a 500 with a raw database or JavaScript error message instead of a 4xx: taking an email that is already used, following an unknown user, favouriting an unknown article, commenting on an unknown article, and creating an article without an article object |
+| Errors | Listing comments of an unknown article returns 200 with an empty object |
+| Validation | Registration accepts any string as an email |
+| Frontend | A failed publish (for example a missing or duplicate title) crashes the app's reducer: no message is shown and the Publish button stays disabled |
+| Frontend | If the articles or tags request fails, or the connection drops, the home page stays on "Loading..." for good, with an uncaught error in the console |
+| Frontend | An article that does not exist shows a blank page |
+
+Contract differences from the usual RealWorld behaviour, pinned by tests: a wrong password returns 403, a missing or invalid token returns a body that is not an `errors` object, and several 404 responses have an empty body.
+
+Accessibility: the only WCAG A/AA rule axe-core reports on any of the seven pages is colour contrast. The navbar links are `#b3b3b3` on white (2.09:1), the green links are `#33aa44` on white (3.01:1) and grey text such as the home page tagline is `#999999` on white (2.84:1); AA needs 4.5:1. Also worth knowing: the app has no `<label>` elements (axe does not flag the inputs, so it accepts their placeholders as names), and the comment delete control is an icon with no text or role, which axe cannot see as interactive.
+
+What works well, and is tested: markup in an article's title or body is shown as text and never runs, a slow response shows "Loading..." and then the content, and an expired token falls back to the signed-out navbar.
+
+## Failure triage: two real failures
+
+**1. "socket hang up" on Firefox.** The hybrid test "article published in the UI is stored with the same content" failed once on Firefox with `apiRequestContext.fetch: socket hang up` on an API read that came after the UI steps.
+- *Evidence.* The API log attached to the failed test showed the first call (registering the user) and then nothing for about 14 seconds, until cleanup. The failing call was never logged, so it broke before any response.
+- *Cause.* The backend's code sets no keep-alive timeout, so Node's default of 5 seconds should apply and the server closes idle connections. The test sat on a slow UI step for longer than that, so it most likely reused a connection the server had already closed.
+- *Fix.* The API client retries only that connection reset (`maxRetries: 2` on the request), instead of hiding the problem behind whole-test retries. That test passed in all 12 later Firefox runs. One other Firefox failure happened once and did not reproduce in 154 more runs of that project, so I do not claim a cause for it.
+
+**2. A Publish button that stays disabled.** Two scenarios expected a "title can't be blank" message and never saw one.
+- *Evidence.* The page snapshot saved with the failure showed the Publish button disabled and no error list. A script that logged the browser's network traffic showed the API answering the publish request with a 422, which is correct.
+- *Cause.* A short script that opened the page in a browser and logged the console showed `Cannot read properties of undefined (reading 'slug')`. After any answer to the publish request, the app's reducer builds the redirect address from `payload.article.slug`, which does not exist in an error body. The reducer throws, the state never leaves "in progress", and the user sees nothing.
+- *Result.* This is an app defect, not a test problem, so both scenarios are kept as expected failures with the cause written next to them.
+
+## Test counts and timings
+
+Measured on my machine with 8 workers, app already running.
+
+| Suite | Tests | Of which expected failures (known defects) |
+|---|---|---|
+| API | 81 | 11 |
+| Hybrid | 13 | 0 |
+| UI (BDD scenarios) | 27 | 2 |
+| Network mocks | 10 | 4 |
+| Accessibility | 7 | 0 |
+| Serial journey | 8 | 0 |
+| Visual | 5 | 0 |
+| Setup | 1 | 0 |
+| **Total** | **152** | **17** |
+
+- Everything except visual: 147 passed in 49.2 s. Visual: 5 passed in 3.8 s.
+- Stability: all of the Chromium suites repeated three times, 454 passed, none failed.
+- k6 load smoke (5 virtual users, 20 s): locally 476 requests, none failed, 95th percentile 20.4 ms. In two nightly CI runs the 95th percentile was 9.6 ms and 12.8 ms. The run fails above 300 ms.
+- CI: the full nightly (Chromium and Firefox, two shards each) has not been timed with all the suites yet: [TBD].
 
 ## Project layout
 
 ```
 features/ui/        Gherkin scenarios
 src/pages/          page objects (actions and state, no assertions)
-src/components/     shared UI parts (navbar)
+src/components/     shared UI parts (navbar, error list)
 src/steps/          step definitions (assertions live here)
-src/fixtures/       Playwright fixtures: API client, logging, cleanup, auth
-src/api/            typed API client and Zod schemas
-src/data/           faker factories
-src/scripts/        seed script
-tests/              auth setup (more suites to come)
+src/fixtures/       Playwright fixtures: API clients, sessions, logging, cleanup, auth
+src/api/            typed API client, Zod schemas, error assertions
+src/data/           faker factories and mock API responses
+src/scripts/        seed script, CI history and metrics tools
+tests/api/          API tests
+tests/hybrid/       hybrid tests
+tests/network/      tests with mocked API responses
+tests/a11y/         accessibility scans
+tests/visual/       screenshot tests and their Linux baselines
+tests/e2e-serial/   the serial journey
+tests/auth.setup.ts signs in once for the UI suite
+perf/k6/            load smoke test
 docker/             Dockerfiles and nginx config for the app under test
+.github/workflows/  PR smoke, nightly regression, update visual baselines
 ```
-
-## Test counts and pipeline times
-
-[TBD] — filled in from real CI runs.
 
 ## What I'd do next
 
-[TBD]
+- Run the same tests against a second RealWorld backend, to separate what is wrong with this app from what is wrong with the spec.
+- Add WebKit to the nightly browsers.
+- Chart the nightly history (duration and flaky count over time) on the report site.
+- Report the defects to the upstream projects.

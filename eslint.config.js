@@ -18,8 +18,14 @@ export default tseslint.config(
     },
   },
   {
-    // Playwright reads a fixture's first parameter to resolve dependencies, so `{}` is required.
-    files: ['src/fixtures/**/*.ts'],
+    // Playwright reads a fixture's or hook's first parameter to resolve dependencies, so `{}` is required
+    // when only the second parameter (testInfo) is wanted.
+    files: ['src/fixtures/**/*.ts', 'tests/**/*.ts'],
     rules: { 'no-empty-pattern': 'off' },
+  },
+  {
+    // k6 scripts run in k6's own runtime, which provides these globals.
+    files: ['perf/**/*.js'],
+    languageOptions: { globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' } },
   },
 );

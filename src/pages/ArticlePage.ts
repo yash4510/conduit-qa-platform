@@ -9,6 +9,7 @@ export class ArticlePage {
   readonly deleteButton: Locator;
   readonly commentInput: Locator;
   readonly postCommentButton: Locator;
+  readonly signInToCommentPrompt: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -19,6 +20,7 @@ export class ArticlePage {
     this.deleteButton = page.getByRole('button', { name: /Delete Article/ });
     this.commentInput = page.getByPlaceholder('Write a comment...');
     this.postCommentButton = page.getByRole('button', { name: 'Post Comment' });
+    this.signInToCommentPrompt = page.getByText('to add comments on this article');
   }
 
   async goto(slug: string): Promise<void> {

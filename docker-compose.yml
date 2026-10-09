@@ -18,6 +18,8 @@ services:
 
   api:
     build: ./docker/api
+    # Fixed image names let CI build with a layer cache first, then start with --no-build.
+    image: conduit-qa-api
     ports:
       - "3000:3000"
     environment:
@@ -38,6 +40,7 @@ services:
 
   frontend:
     build: ./docker/frontend
+    image: conduit-qa-frontend
     ports:
       - "4100:80"
     depends_on:

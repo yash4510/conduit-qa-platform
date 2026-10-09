@@ -1,0 +1,63 @@
+name: Update visual baselines
+
+# Visual tests compare screenshots with Linux baselines, because CI runs on Linux and fonts render
+# differently on other systems. Run this after an intended UI change, or the first time:
+# Actions > Update visual baselines > Run workflow, choosing the branch. It regenerates the baselines
+# and commits them to that branch. Look at the image changes in that commit before merging.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: visual-baselines-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Regenerate and commit baselines
+    # Pinned: ubuntu-latest becomes Ubuntu 26 on 2026-10-19, and the visual baselines depend on the image's fonts.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # The pages are drawn from mocked data, but the frontend itself must be running.
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/bake-action@v7
+        env:
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          files: docker-compose.yml
+          load: true
+          set: |
+            api.cache-from=type=gha,scope=api
+            api.cache-to=type=gha,scope=api,mode=max
+            frontend.cache-from=type=gha,scope=frontend
+            frontend.cache-to=type=gha,scope=frontend,mode=max
+      - name: Start app under test
+        run: docker compose up -d --wait --no-build
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Regenerate baselines
+        run: npx playwright test --project=visual-chromium --update-snapshots
+
+      - name: Commit changed baselines
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/visual
+          if git diff --cached --quiet; then
+            echo "Baselines are unchanged."
+          else
+            git commit -m "test: update visual baselines (Linux)"
+            git push
+          fi

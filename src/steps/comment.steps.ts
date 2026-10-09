@@ -26,3 +26,9 @@ Then('I see my comment under the article', async ({ articlePage, scenario }) => 
 Then('my comment is no longer shown', async ({ articlePage, scenario }) => {
   await expect(articlePage.comment(scenario.comment!)).toHaveCount(0);
 });
+
+Then('the comment box is empty', async ({ articlePage, scenario }) => {
+  // Wait for the comment to appear so the box is checked after the post, not before it.
+  await expect(articlePage.comment(scenario.comment!)).toBeVisible();
+  await expect(articlePage.commentInput).toHaveValue('');
+});

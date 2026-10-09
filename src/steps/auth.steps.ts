@@ -51,6 +51,32 @@ Then('I am signed in as the test user', async ({ homePage, authUser }) => {
   await expect(homePage.navbar.userLink(authUser.username)).toBeVisible();
 });
 
-Then('I see the error {string}', async ({ loginPage }, message: string) => {
-  await expect(loginPage.errorMessages).toContainText(message);
+Then('I see the error {string}', async ({ errorList }, message: string) => {
+  await expect(errorList.messages).toContainText(message);
+});
+
+Given('I am on the settings page', async ({ settingsPage }) => {
+  await settingsPage.goto();
+});
+
+When("I sign up with that user's email and a new username", async ({ registerPage, scenario }) => {
+  await registerPage.signUp({ ...buildUser(), email: scenario.user!.email });
+});
+
+When("I sign up with that user's username and a new email", async ({ registerPage, scenario }) => {
+  await registerPage.signUp({ ...buildUser(), username: scenario.user!.username });
+});
+
+When('I sign in with an unregistered email', async ({ loginPage }) => {
+  const stranger = buildUser();
+  await loginPage.signIn(stranger.email, stranger.password);
+});
+
+When('I sign out', async ({ settingsPage }) => {
+  await settingsPage.logout();
+});
+
+Then('I am asked to sign in to comment', async ({ articlePage }) => {
+  await expect(articlePage.signInToCommentPrompt).toBeVisible();
+  await expect(articlePage.commentInput).toBeHidden();
 });

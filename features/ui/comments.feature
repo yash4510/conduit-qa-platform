@@ -16,3 +16,10 @@ Feature: Comments
     And I am on that article's page
     When I delete my comment
     Then my comment is no longer shown
+
+  @regression
+  Scenario: Comment box is emptied after posting
+    Given I have published an article
+    And I am on that article's page
+    When I post a comment
+    Then the comment box is empty

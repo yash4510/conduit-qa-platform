@@ -22,12 +22,13 @@ export class ArticleEditorPage {
     await this.page.goto('/editor');
   }
 
-  async fill(article: NewArticle): Promise<void> {
-    await this.titleInput.fill(article.title);
-    await this.descriptionInput.fill(article.description);
-    await this.bodyInput.fill(article.body);
+  // Fills only the fields that are given, so a scenario can leave one out.
+  async fill(article: Partial<NewArticle>): Promise<void> {
+    if (article.title !== undefined) await this.titleInput.fill(article.title);
+    if (article.description !== undefined) await this.descriptionInput.fill(article.description);
+    if (article.body !== undefined) await this.bodyInput.fill(article.body);
     // The app adds a tag on Enter, one at a time.
-    for (const tag of article.tagList) {
+    for (const tag of article.tagList ?? []) {
       await this.tagsInput.fill(tag);
       await this.tagsInput.press('Enter');
     }

@@ -6,16 +6,25 @@ export class HomePage {
   readonly navbar: Navbar;
   readonly globalFeedTab: Locator;
   readonly yourFeedTab: Locator;
+  readonly emptyFeedMessage: Locator;
+  readonly loadingMessage: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.navbar = new Navbar(page);
     this.globalFeedTab = page.getByRole('link', { name: 'Global Feed' });
     this.yourFeedTab = page.getByRole('link', { name: 'Your Feed' });
+    this.emptyFeedMessage = page.getByText('No articles are here... yet.');
+    // Exact, so it does not also match "Loading Tags...".
+    this.loadingMessage = page.getByText('Loading...', { exact: true });
   }
 
   async goto(): Promise<void> {
     await this.page.goto('/');
+  }
+
+  async openYourFeed(): Promise<void> {
+    await this.yourFeedTab.click();
   }
 
   // Article cards have no role or test id; filter the card class by the visible title.

@@ -65,3 +65,30 @@ Then('I am taken to the home page', async ({ page }) => {
 Then('the article no longer exists', async ({ api, scenario }) => {
   await expect(api.getArticle(scenario.article!.slug)).rejects.toMatchObject({ status: 404 });
 });
+
+Given('another author has published an article', async ({ newSession, scenario }) => {
+  scenario.author = await newSession();
+  scenario.article = await scenario.author.api.createArticle(buildArticle());
+});
+
+When('I publish an article without a title', async ({ editorPage }) => {
+  await editorPage.fill({ ...buildArticle(), title: undefined });
+  await editorPage.publish();
+});
+
+When('I publish another article with the same title', async ({ editorPage, scenario }) => {
+  await editorPage.fill({ ...buildArticle(), title: scenario.article!.title });
+  await editorPage.publish();
+});
+
+Then('I see the edit and delete buttons', async ({ articlePage }) => {
+  await expect(articlePage.editLink).toBeVisible();
+  await expect(articlePage.deleteButton).toBeVisible();
+});
+
+Then('I do not see the edit and delete buttons', async ({ articlePage, scenario }) => {
+  // Wait for the article to render first, or "hidden" would pass before the page has loaded.
+  await expect(articlePage.title).toHaveText(scenario.article!.title);
+  await expect(articlePage.editLink).toBeHidden();
+  await expect(articlePage.deleteButton).toBeHidden();
+});
