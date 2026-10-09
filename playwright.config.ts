@@ -38,6 +38,13 @@ export default defineConfig({
       testMatch: /.*\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
+    // One stateful journey in a single file; see the header of the spec for why it is serial.
+    {
+      name: 'serial-chromium',
+      testDir: 'tests/e2e-serial',
+      testMatch: /.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
     // Fresh user per test, like the hybrid project.
     {
       name: 'a11y-chromium',

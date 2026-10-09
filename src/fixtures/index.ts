@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { BrowserContext } from '@playwright/test';
 import { test as base } from 'playwright-bdd';
 import { ApiError, ConduitApi } from '../api/client.ts';
 import type { Article, User } from '../api/schemas.ts';
@@ -27,6 +28,16 @@ type ScenarioState = {
 
 // The only origins a test browser may talk to: the frontend and the API.
 const localOrigins = new Set([new URL(env.BASE_URL).origin, new URL(env.API_URL).origin]);
+
+// Tests must only touch the local app, and a slow third-party host (icons, fonts, avatars) delays page
+// load and would make visual baselines flaky, so every other request is aborted. Exported for tests that
+// create their own browser context.
+export async function blockNonLocalRequests(context: BrowserContext): Promise<void> {
+  await context.route(/.*/, (route) => {
+    const { origin } = new URL(route.request().url());
+    return localOrigins.has(origin) ? route.continue() : route.abort();
+  });
+}
 
 // A freshly registered user plus an API client signed in as them.
 export type Session = { user: NewUser; profile: User; api: ConduitApi };
@@ -64,13 +75,9 @@ export const test = base.extend<Fixtures>({
     await use({ 'x-correlation-id': logger.correlationId });
   },
 
-  // The app loads icons, fonts and avatars from third-party hosts. Tests must only touch the local app,
-  // and a slow CDN delays page load (and would make visual baselines flaky), so those requests are aborted.
+  // Every test browser only talks to the local app; see blockNonLocalRequests.
   context: async ({ context }, use) => {
-    await context.route(/.*/, (route) => {
-      const { origin } = new URL(route.request().url());
-      return localOrigins.has(origin) ? route.continue() : route.abort();
-    });
+    await blockNonLocalRequests(context);
     await use(context);
   },
 

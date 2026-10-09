@@ -18,8 +18,9 @@ export default tseslint.config(
     },
   },
   {
-    // Playwright reads a fixture's first parameter to resolve dependencies, so `{}` is required.
-    files: ['src/fixtures/**/*.ts'],
+    // Playwright reads a fixture's or hook's first parameter to resolve dependencies, so `{}` is required
+    // when only the second parameter (testInfo) is wanted.
+    files: ['src/fixtures/**/*.ts', 'tests/**/*.ts'],
     rules: { 'no-empty-pattern': 'off' },
   },
 );
