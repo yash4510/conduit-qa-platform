@@ -34,13 +34,14 @@ jobs:
       - run: npm run format:check
 
   smoke:
-    name: Smoke (shard ${{ matrix.shard }} of 2)
+    name: Smoke (shard ${{ matrix.shard }} of ${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        # One shard measured fastest at this suite size (see README). To shard, list more here: [1, 2].
+        shard: [1]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -67,7 +68,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
 
       - name: Smoke tests
-        run: npm run test:smoke -- --shard=${{ matrix.shard }}/2
+        run: npm run test:smoke -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
       - name: Dump app logs on failure
         if: failure()
