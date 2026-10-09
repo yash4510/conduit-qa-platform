@@ -1,6 +1,9 @@
 # Conduit QA Platform
 
 [![PR smoke](https://github.com/yash4510/conduit-qa-platform/actions/workflows/pr-smoke.yml/badge.svg)](https://github.com/yash4510/conduit-qa-platform/actions/workflows/pr-smoke.yml)
+[![Nightly regression](https://github.com/yash4510/conduit-qa-platform/actions/workflows/nightly-regression.yml/badge.svg)](https://github.com/yash4510/conduit-qa-platform/actions/workflows/nightly-regression.yml)
+
+Latest nightly report: [TBD]
 
 A Playwright + TypeScript test automation platform for a self-hosted RealWorld "Conduit" app (a Medium-style blog: articles, comments, follows, favourites). The app runs locally in Docker, so every test runs against an environment I control.
 
@@ -14,8 +17,9 @@ A Playwright + TypeScript test automation platform for a self-hosted RealWorld "
 | API tests | Typed client, every response validated with Zod | done |
 | Hybrid tests | API for setup and verification, browser for the behaviour | done |
 | Test data | @faker-js/faker factories, a fresh user per test | done |
-| CI | GitHub Actions: lint, typecheck, app in Docker, smoke suite | done |
-| Sharding, nightly run, report on Pages | | planned |
+| CI on pull requests | GitHub Actions: lint, typecheck, app in Docker, smoke suite (shardable), one "PR gate" check | done |
+| Nightly run | Chromium + Firefox, sharded, merged HTML report | done |
+| Report on GitHub Pages, failure webhook | | [TBD] until the first publish from `main` |
 | Accessibility, visual, network mocks, k6 | | planned |
 
 ## Quick start
@@ -34,7 +38,8 @@ npm run test:smoke
 | `npm run test:smoke` | the `@smoke` set: the PR gate |
 | `npm run test:api` | API tests only (no browser) |
 | `npm run test:hybrid` | hybrid tests |
-| `npm run test:regression` | everything |
+| `npm run test:regression` | everything, on Chromium |
+| `npm run test:firefox` | UI and hybrid tests on Firefox (`npx playwright install firefox` first) |
 | `npm run report` | opens the HTML report |
 
 App: http://localhost:4100 · API: http://localhost:3000/api/tags
@@ -88,6 +93,38 @@ Reset to an empty database: `docker compose down -v && docker compose up -d --wa
 - **Debuggable failures.** Every test sends an `x-correlation-id` header, and the API calls it made (method, URL, status, duration) are attached to the report when it fails.
 - **Reproducible and self-contained app.** Both upstream repos are pinned to commit SHAs, every container has a healthcheck, and the theme CSS and icon font are bundled with checksums after their original hosts stopped working. The test browser aborts any request to a non-local host, so a slow CDN cannot make a test flaky.
 
+## CI/CD
+
+**On every pull request** (`PR smoke`):
+1. `Lint, typecheck, format` runs in parallel with the app build, so a style error fails in seconds.
+2. `Smoke` is a matrix of shards (one today, see the measurements below). Each shard builds the app images with a Docker layer cache, starts them with `docker compose up --wait`, and runs its share of the `@smoke` tests.
+3. `Merge reports` combines the shards' blob reports into one HTML report, with traces, screenshots and videos for anything that failed.
+4. `PR gate` is the single check that has to be green. It stays the same name however many shards there are, so branch protection never needs updating.
+
+**Every night** (`Nightly regression`, 02:00 Chennai time, or by hand): the whole suite on Chromium and on Firefox, sharded, then one merged report. On `main` it is published to GitHub Pages together with a small `history.json` (totals and flaky count per run). If a shard fails, a webhook message is sent.
+
+**How sharding and merging work.** `--shard=1/2` makes a job run half of the selected tests. The `setup` project runs in every shard, because the tests depend on it. With the `blob` reporter each shard writes a zip instead of a report; the merge job downloads them all and `playwright merge-reports` builds one HTML report as if the run had never been split.
+
+**Measured pipeline times.** I ran the same code through five setups, five warm-cache runs each (six for the old workflow), on GitHub-hosted runners over several days:
+
+| Pipeline | What is timed | Median | Min | Max |
+|---|---|---|---|---|
+| PR smoke, old: rebuild the app every run, no sharding | until the smoke job finishes | 146.5 s | 119 s | 153 s |
+| PR smoke, layer cache, 1 shard | until "PR gate" is green | 125 s | 96 s | 139 s |
+| PR smoke, layer cache, 2 shards | until "PR gate" is green | 136 s | 123 s | 174 s |
+| Nightly, 1 shard per browser | whole workflow | 162 s | 144 s | 172 s |
+| Nightly, 2 shards per browser | whole workflow | 152 s | 148 s | 162 s |
+
+The first run after the cache is empty is slower: 234 to 243 s for the PR setups and 214 to 239 s for the nightly ones.
+
+What I take from it:
+- **The layer cache helped.** Time until the gate is green dropped by about 15% (146.5 s to 125 s). Building the app was the biggest single step before; with a warm cache it takes about 20 to 30 s.
+- **Sharding the PR smoke suite did not help.** It was about 11 s slower. The smoke tests take 6 to 10 s, and every shard repeats well over a minute of setup (checkout, image load, starting the app, installing the browser). So the PR gate uses one shard, and splitting again is a one-line change in the workflow.
+- **Sharding the nightly run helped a little**, about 6% (162 s to 152 s). It will matter more as the suite grows.
+- With five runs per setup and overlapping ranges, treat these as a direction, not proof.
+
+To reproduce: `node src/scripts/ci-metrics.ts runs pr-smoke.yml --branch=ci-bench-b --until-job="PR gate" --skip-oldest=1`.
+
 ## Findings
 
 Real defects found while testing, each covered by a test marked as an expected failure:
@@ -120,7 +157,7 @@ Measured on my machine with 8 workers, app already running.
 
 - Full run: 122 passed in 29.1 s.
 - Stability: the whole suite repeated three times, 364 passed, none failed.
-- CI timings for the full run: [TBD]
+- CI: the nightly run (Chromium and Firefox, two shards each) has a median wall time of 152 s over five warm runs.
 
 ## Project layout
 
