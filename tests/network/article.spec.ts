@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { test } from '../../src/fixtures/index.ts';
-import { json, mockArticle } from './support.ts';
+import { json, mockArticle } from '../../src/data/mocks.ts';
 
 test.describe('Article page with mocked responses', { tag: ['@network', '@regression'] }, () => {
   test('markup in an article body is shown as text and never runs', async ({ page, articlePage }) => {

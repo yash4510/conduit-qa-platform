@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { test } from '../../src/fixtures/index.ts';
-import { articleList, json, mockArticle } from './support.ts';
+import { articleList, json, mockArticle } from '../../src/data/mocks.ts';
 
 // The home page loads articles and tags with two requests. These tests answer them from the test,
 // so they cover empty, slow, odd and failing responses that are hard to produce with the real API.

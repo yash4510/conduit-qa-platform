@@ -42,7 +42,7 @@ export const articlesResponseSchema = z.object({
   articlesCount: z.number(),
 });
 
-const commentSchema = z.object({
+export const commentSchema = z.object({
   id: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
