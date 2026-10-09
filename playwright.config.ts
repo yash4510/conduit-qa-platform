@@ -31,6 +31,20 @@ export default defineConfig({
       dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
+    // Mocked API responses: no backend data needed, so no setup and no signed-in user.
+    {
+      name: 'network-chromium',
+      testDir: 'tests/network',
+      testMatch: /.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    // Fresh user per test, like the hybrid project.
+    {
+      name: 'a11y-chromium',
+      testDir: 'tests/a11y',
+      testMatch: /.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
     // Firefox runs in the nightly matrix; pull requests stay on Chromium for speed.
     {
       name: 'ui-firefox',
