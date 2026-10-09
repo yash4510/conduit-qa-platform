@@ -2,6 +2,7 @@
 //
 //   node src/scripts/ci-metrics.ts runs <workflow-file> [--branch=main] [--event=pull_request]
 //                                   [--since=<iso>] [--until=<iso>]
+//                                   [--until-job=<job name prefix>] [--skip-oldest=<n>]
 //   node src/scripts/ci-metrics.ts flaky [--last=20]
 //
 // `runs` lists completed runs of a workflow with their wall-clock time (start to finish) and
@@ -30,6 +31,10 @@ const runsSchema = z.object({
   ),
 });
 
+const jobsSchema = z.object({
+  jobs: z.array(z.object({ name: z.string(), completed_at: z.string().nullable() })),
+});
+
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -38,6 +43,8 @@ const { values, positionals } = parseArgs({
     since: { type: 'string' },
     until: { type: 'string' },
     last: { type: 'string', default: '20' },
+    'until-job': { type: 'string' },
+    'skip-oldest': { type: 'string', default: '0' },
   },
 });
 
@@ -45,6 +52,25 @@ const median = (numbers: number[]): number => {
   const sorted = [...numbers].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
+};
+
+async function secondsUntilJob(runId: number, prefix: string, startedAt: string): Promise<number | null> {
+  const res = await fetch(
+    `https://api.github.com/repos/${repository}/actions/runs/${runId}/jobs?per_page=100`,
+  );
+  if (!res.ok) throw new Error(`GitHub API answered ${res.status}: ${await res.text()}`);
+  const { jobs } = jobsSchema.parse(await res.json());
+  const finished = jobs
+    .filter((j) => j.name.toLowerCase().startsWith(prefix.toLowerCase()) && j.completed_at)
+    .map((j) => Date.parse(j.completed_at!));
+  return finished.length ? Math.round((Math.max(...finished) - Date.parse(startedAt)) / 1000) : null;
+}
+
+const summary = (label: string, numbers: number[]): void => {
+  if (numbers.length === 0) return console.log(`${label}: no successful runs in this selection.`);
+  console.log(
+    `${label}: ${numbers.length} runs | median ${median(numbers)} s | min ${Math.min(...numbers)} s | max ${Math.max(...numbers)} s`,
+  );
 };
 
 async function showRuns(workflowFile: string): Promise<void> {
@@ -57,26 +83,44 @@ async function showRuns(workflowFile: string): Promise<void> {
   if (!res.ok) throw new Error(`GitHub API answered ${res.status}: ${await res.text()}`);
   const { workflow_runs } = runsSchema.parse(await res.json());
 
-  const rows = workflow_runs
+  // Oldest first, so --skip-oldest can drop the cold-cache first run.
+  const selected = workflow_runs
     .filter(
       (r) =>
         (!values.since || r.created_at >= values.since) && (!values.until || r.created_at <= values.until),
     )
-    .map((r) => ({
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const rows = [];
+  for (const r of selected) {
+    rows.push({
       run: r.id,
-      event: r.event,
       branch: r.head_branch,
       sha: r.head_sha.slice(0, 7),
       conclusion: r.conclusion,
-      seconds: Math.round((Date.parse(r.updated_at) - Date.parse(r.run_started_at)) / 1000),
-    }));
+      // Whole workflow: start to the last job finishing (includes report merging).
+      workflowSeconds: Math.round((Date.parse(r.updated_at) - Date.parse(r.run_started_at)) / 1000),
+      // Time until a named job finishes, e.g. "PR gate": when a developer sees the check go green.
+      untilJobSeconds: values['until-job']
+        ? await secondsUntilJob(r.id, values['until-job'], r.run_started_at)
+        : undefined,
+    });
+  }
   console.table(rows);
 
-  const ok = rows.filter((r) => r.conclusion === 'success').map((r) => r.seconds);
-  if (ok.length === 0) return console.log('No successful runs in this selection.');
-  console.log(
-    `successful runs: ${ok.length} | median ${median(ok)} s | min ${Math.min(...ok)} s | max ${Math.max(...ok)} s`,
+  const counted = rows.filter((r) => r.conclusion === 'success').slice(Number(values['skip-oldest']));
+  const skipped = rows.filter((r) => r.conclusion === 'success').length - counted.length;
+  console.log(skipped ? `(first ${skipped} successful run(s) left out of the summary)` : '');
+  summary(
+    'workflow time',
+    counted.map((r) => r.workflowSeconds),
   );
+  if (values['until-job']) {
+    summary(
+      `time until "${values['until-job']}" finishes`,
+      counted.flatMap((r) => (r.untilJobSeconds == null ? [] : [r.untilJobSeconds])),
+    );
+  }
 }
 
 async function showFlaky(): Promise<void> {
