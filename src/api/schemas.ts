@@ -22,7 +22,7 @@ const profileSchema = z.object({
 
 export const profileResponseSchema = z.object({ profile: profileSchema });
 
-const articleSchema = z.object({
+export const articleSchema = z.object({
   slug: z.string(),
   title: z.string(),
   description: z.string(),

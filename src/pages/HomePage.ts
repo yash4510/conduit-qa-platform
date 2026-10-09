@@ -7,6 +7,7 @@ export class HomePage {
   readonly globalFeedTab: Locator;
   readonly yourFeedTab: Locator;
   readonly emptyFeedMessage: Locator;
+  readonly loadingMessage: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -14,6 +15,8 @@ export class HomePage {
     this.globalFeedTab = page.getByRole('link', { name: 'Global Feed' });
     this.yourFeedTab = page.getByRole('link', { name: 'Your Feed' });
     this.emptyFeedMessage = page.getByText('No articles are here... yet.');
+    // Exact, so it does not also match "Loading Tags...".
+    this.loadingMessage = page.getByText('Loading...', { exact: true });
   }
 
   async goto(): Promise<void> {
