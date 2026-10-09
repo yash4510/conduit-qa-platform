@@ -4,9 +4,6 @@ on:
   schedule:
     - cron: '30 20 * * *' # 20:30 UTC, which is 02:00 in Chennai
   workflow_dispatch:
-  push:
-    # TEMPORARY: lets this workflow run from a branch before it exists on main. Remove before merging.
-    branches: [phase-3]
 
 permissions:
   contents: read
