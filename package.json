@@ -19,6 +19,7 @@
     "test:visual": "playwright test --project=visual-chromium",
     "test:serial": "playwright test --project=serial-chromium",
     "test:hybrid": "playwright test --project=hybrid-chromium",
+    "perf:smoke": "docker run --rm -i --add-host=host.docker.internal:host-gateway -e API_URL=http://host.docker.internal:3000/api grafana/k6:2.3.0 run - < perf/k6/smoke.js",
     "seed": "node src/scripts/seed.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

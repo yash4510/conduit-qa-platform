@@ -23,4 +23,9 @@ export default tseslint.config(
     files: ['src/fixtures/**/*.ts', 'tests/**/*.ts'],
     rules: { 'no-empty-pattern': 'off' },
   },
+  {
+    // k6 scripts run in k6's own runtime, which provides these globals.
+    files: ['perf/**/*.js'],
+    languageOptions: { globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly' } },
+  },
 );
