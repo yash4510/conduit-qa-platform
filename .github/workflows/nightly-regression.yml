@@ -18,7 +18,8 @@ concurrency:
 jobs:
   tests:
     name: ${{ matrix.browser }} (shard ${{ matrix.shard }} of 2)
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest becomes Ubuntu 26 on 2026-10-19, and the visual baselines depend on the image's fonts.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -87,7 +88,7 @@ jobs:
     name: Merge reports
     needs: tests
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -133,7 +134,7 @@ jobs:
     name: Publish report to GitHub Pages
     needs: report
     if: ${{ github.ref == 'refs/heads/main' && needs.report.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write
@@ -148,7 +149,7 @@ jobs:
     name: Notify on failure
     needs: [tests, report]
     if: ${{ always() && (needs.tests.result == 'failure' || needs.report.result == 'failure') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Secret, set under Settings > Secrets and variables > Actions. Without it this job does nothing.
       WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}

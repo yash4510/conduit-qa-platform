@@ -13,9 +13,10 @@ export const options = {
   vus: 5,
   duration: '20s',
   thresholds: {
-    // Fewer than 1% of requests may fail, and 95% must finish within one second.
+    // Fewer than 1% of requests may fail, and 95% must finish within 300 ms. Measured p95 was 9.6 ms in CI and
+    // 20.4 ms on a laptop, so this leaves wide room for a slow runner and still catches a real slowdown.
     http_req_failed: ['rate<0.01'],
-    http_req_duration: ['p(95)<1000'],
+    http_req_duration: ['p(95)<300'],
     checks: ['rate>0.99'],
   },
 };

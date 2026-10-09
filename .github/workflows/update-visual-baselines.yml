@@ -24,7 +24,8 @@ concurrency:
 jobs:
   update:
     name: Regenerate and commit baselines
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest becomes Ubuntu 26 on 2026-10-19, and the visual baselines depend on the image's fonts.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7

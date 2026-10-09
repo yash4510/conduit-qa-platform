@@ -19,7 +19,7 @@ jobs:
   # Cheap checks first and in parallel with the app build, so a style or type error fails in seconds.
   static:
     name: Lint, typecheck, format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -34,7 +34,7 @@ jobs:
 
   smoke:
     name: Smoke (shard ${{ matrix.shard }} of ${{ strategy.job-total }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -89,7 +89,7 @@ jobs:
     name: Merge reports
     needs: smoke
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -115,7 +115,7 @@ jobs:
     name: PR gate
     needs: [static, smoke]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Require static checks and every smoke shard to pass
         run: |
