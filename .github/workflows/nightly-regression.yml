@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     # TEMPORARY: lets this workflow run from a branch before it exists on main. Remove before merging.
-    branches: [phase-3]
+    branches: [ci-check-fail]
 
 permissions:
   contents: read
